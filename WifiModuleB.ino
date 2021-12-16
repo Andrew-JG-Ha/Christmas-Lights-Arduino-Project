@@ -3,8 +3,10 @@
 #include <ESP8266WiFi.h>
 #include <espnow.h>
 
+const int isSyncedLED = 16; //S2
+
 //VARIABLES FOR ACTIVATION BUTTON:
-const int activationButton = 5; //D1 (activation/reset button) swapped with sync
+const int activationButton = 5; //D1 (activation/reset button)
   int value_activation = 0;
   unsigned long timer_activation = 0;
   unsigned long timerStart_activation = 0;
@@ -36,7 +38,6 @@ const int toRegulatorA = 14; //D5
 const int toRegulatorB = 12; //D6
 const int toRegulatorC = 13; //D7
 const int toRegulatorD = 15; //D8
-const int frequencySelector = A0; //A0 (for analog read)
   int state_PatternA = 0;
   int statePrevious_PatternA = 0;
   int state_PatternB = 0;
@@ -49,18 +50,11 @@ const int frequencySelector = A0; //A0 (for analog read)
   unsigned long timerStart_pattern = 0;
 
 //VARIABLES FOR DELAY TIMER: (TIMINGS FOR DELAYS)
+const int frequencySelector = A0; //A0 (for analog read)
   unsigned long delay_pattern = 5000;
-  unsigned long delay_pattern_previous = delay_pattern;
-  unsigned long delay_pattern_truePrevious = delay_pattern;
-  unsigned long timer_delayTimer = 0;
-  unsigned long timerStart_delayTimer = 0;
-  unsigned long bounce_delay_delayTimer = 150; 
-  float delay_pattern_threshold = 0.00015; //must be exceeding 0.015% to be registered as a change
-  float frequencyValue = 0;
-  int state_delayTimer = 0;
-  int state_delayTimer_previous = 0;
-  int value_delayTimer = 0;
-
+  float delay_pattern_threshold = 0.0025; //must be exceeding 0.25% to be registered as a change
+  float value_delay_pattern = 0;
+  
 //CONTROL VARIABLES:
 const bool DEBUG = true;
   bool systemRunning = false;
@@ -77,6 +71,10 @@ typedef struct moduleBData { //module within home
   int pattern = 0;
   bool isActive = false;
   bool isSync = true;
+  int statePatternA = 0;
+  int statePatternB = 0;
+  int statePatternC = 0;
+  int statePatternD = 0;
 } moduleBData;
 
 //STRUCTURE TO BE RECEIVED:
@@ -86,9 +84,13 @@ typedef struct moduleAData { //module outside
 } moduleAData;
 
 //VARIABLES DEALING WITH WIFI:
-uint8_t broadcastAddress[] = {0x50,0x02,0x91,0xE0,0x53,0xE1}; //MAC of wifi module A
+uint8_t broadcastAddress[] = {0x50, 0x02, 0x91, 0xE0, 0x53, 0xE1}; //MAC of wifi module A
   moduleBData outputData; //package to be shipped to module A
   moduleAData inputData;
+  bool isSent = false;
+  unsigned long lastSend = 0;
+  unsigned long currentSend = 0;
+  unsigned long maxInterval = 10000; //max 10 seconds without a send to other module
 
 void setup() {
   pinMode(activationButton, INPUT);
@@ -100,6 +102,7 @@ void setup() {
   pinMode(toRegulatorB, OUTPUT);
   pinMode(toRegulatorC, OUTPUT);
   pinMode(toRegulatorD, OUTPUT);
+  pinMode(isSyncedLED, OUTPUT);
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
   if (DEBUG == true) {
@@ -123,68 +126,46 @@ void loop() {
   if (state_activation == 5){
     systemRunning = !systemRunning;
     outputData.isActive = systemRunning; // change in activation 
+    outputData.isSync = modulesSynced;
     esp_now_send(0, (uint8_t *) &outputData, sizeof(outputData));
+    if (isSent == true){
+      lastSend = millis();    
+    }
   }
   if (state_sync == 5){
     modulesSynced = !modulesSynced;
+    outputData.isActive = systemRunning; // change in activation 
     outputData.isSync = modulesSynced;
     esp_now_send(0, (uint8_t *) &outputData, sizeof(outputData));
+    if (isSent == true){
+      lastSend = millis();  
+      if(modulesSynced == true) {
+        digitalWrite(isSyncedLED, HIGH);
+      }
+      else {
+        digitalWrite(isSyncedLED, LOW);
+      }
+    }
   }
   
   if (systemRunning == true) {
       debounceProgramButton();
-      FSM_updateDelayPattern();
-      
-      if (selectedProgramValue == 1){
-        if (state_PatternA == 1){ //is in wait state, run it
-          state_PatternA == 2;
+      updateDelayTimer();
+      if (modulesSynced == true) {
+        updateOutputStates();
+        esp_now_send(0, (uint8_t *) &outputData, sizeof(outputData));
+        if (isSent == true){
+          lastSend = millis();    
         }
-        FSM_patternA();        
-        if(DEBUG == true){
-          if(state_PatternA != statePrevious_PatternA){
-            Serial.print("State of A: ");
-            Serial.println(state_PatternA);
-          }
+        if (DEBUG == true) {
+          Serial.println("updateDelayTimer's send was run");        
         }
-      }
-      else if (selectedProgramValue == 2){
-        if (state_PatternB == 1){ //is in wait state, run it
-          state_PatternB == 2;
+        if (isSent == true) {
+          runPatterns();                  
         }
-        FSM_patternB();        
-        if(DEBUG == true){
-          if(state_PatternB != statePrevious_PatternB){
-            Serial.print("State of B: ");
-            Serial.println(state_PatternB);
-          }
-        }        
-      }
-      else if (selectedProgramValue == 3){
-        if (state_PatternC == 1){ //is in wait state, run it
-          state_PatternC == 2;
-        }
-        FSM_patternC();        
-        if(DEBUG == true){
-          if(state_PatternC != statePrevious_PatternC){
-            Serial.print("State of C: ");
-            Serial.println(state_PatternC);
-          }
-        }         
-      }
-      else if (selectedProgramValue == 4){
-        if (state_PatternD == 1){ //is in wait state, run it
-          state_PatternD == 2;
-        }
-        FSM_patternD();        
-        if(DEBUG == true){
-          if(state_PatternD != statePrevious_PatternD){
-            Serial.print("State of D: ");
-            Serial.println(state_PatternD);
-          }
-        }         
       }
       else {
-        FSM_default();
+        runPatterns(); 
       }
   }
   else {
@@ -197,6 +178,21 @@ void loop() {
         state_PatternC = 0;
         state_PatternD = 0;
         count = 0;
+  }
+  currentSend = millis();
+  if (currentSend - lastSend > maxInterval) {
+    unsigned long delayTime = delay_pattern;
+    outputData.pattern = selectedProgramValue;
+    outputData.isActive = systemRunning;
+    outputData.isSync = modulesSynced;
+    outputData.statePatternA = state_PatternA;
+    outputData.statePatternB = state_PatternB;
+    outputData.statePatternC = state_PatternC;
+    outputData.statePatternD = state_PatternD;
+    esp_now_send(0, (uint8_t *) &outputData, sizeof(outputData));
+    if (isSent == true){
+      lastSend = millis();    
+    }
   }
 }
 
@@ -235,6 +231,9 @@ void debounceProgramButton(){//state machine
       outputData.pattern = selectedProgramValue;
       if (modulesSynced == true) {
         esp_now_send(0, (uint8_t *) &outputData, sizeof(outputData));
+        if (isSent == true){
+          lastSend = millis();    
+        }
         if (DEBUG == true) {
           Serial.println("SelectPattern's send was run");        
         }        
@@ -310,65 +309,84 @@ void debounceSynchronizationButton(){//state machine
   }
 }
 
-void FSM_updateDelayPattern(){
-    delay_pattern_previous = delay_pattern;
-    state_delayTimer_previous = state_delayTimer;
-    unsigned long delay_threshold = delay_pattern_previous*delay_pattern_threshold;
-        
-    switch(state_delayTimer){
-            case(0): //RESET
-        state_delayTimer = 1;
-      break;
-      case(1): //ARM
-        timerStart_delayTimer = millis();
-        delay_pattern_previous = delay_pattern;
-        state_delayTimer = 2;
-      break;
-      case(2): //START
-        timer_delayTimer = millis();
-        if (timer_delayTimer - timerStart_delayTimer > bounce_delay_delayTimer){
-          frequencyValue = log(static_cast<float>(analogRead(frequencySelector)+ 1023)/1023); // downscales frequency as a multiplier
-          delay_pattern = 5000; 
-          delay_pattern = delay_pattern + delay_pattern*frequencyValue;
-          if (delay_pattern < delay_pattern_previous - delay_threshold || delay_pattern > delay_pattern_previous + delay_threshold){ //both not equal, we know something has changed
-            state_delayTimer = 0;
-          }
-          if (delay_pattern >= delay_pattern_previous - delay_threshold && delay_pattern <= delay_pattern_previous + delay_threshold) { //within bounds of change
-            if (delay_pattern != delay_pattern_truePrevious) {//check if is equal to the previous frequency
-              state_delayTimer = 3;
-              delay_pattern_previous = delay_pattern;
-            }
-            else {
-              state_delayTimer = 0;
-            }
+void updateDelayTimer(){
+    value_delay_pattern = log(static_cast<float>(analogRead(frequencySelector)+ 1023)/1023); // downscales frequency as a multiplier
+    delay_pattern = 5000; 
+    delay_pattern = delay_pattern + (delay_pattern * value_delay_pattern);
+    outputData.delayTime = delay_pattern;
+}
+
+void updateOutputStates(){
+    outputData.statePatternA = state_PatternA;
+    outputData.statePatternB = state_PatternB;
+    outputData.statePatternC = state_PatternC;
+    outputData.statePatternD = state_PatternD;
+}
+
+void runPatterns(){
+      if (selectedProgramValue == 1){
+        if (state_PatternA == 1){ //is in wait state, run it
+          state_PatternA == 2;
+          state_PatternB = 0;
+          state_PatternC = 0;
+          state_PatternD = 0;
+        }
+        FSM_patternA();        
+        if(DEBUG == true){
+          if(state_PatternA != statePrevious_PatternA){
+            Serial.print("State of A: ");
+            Serial.println(state_PatternA);
           }
         }
-      break;
-      case(3): //HOLD
-          frequencyValue = log(static_cast<float>(analogRead(frequencySelector)+ 1023)/1023); // downscales frequency as a multiplier
-          delay_pattern = 5000; 
-          delay_pattern = delay_pattern + delay_pattern*frequencyValue;
-          if (delay_pattern >= delay_pattern_previous - delay_threshold && delay_pattern <= delay_pattern_previous + delay_threshold) {
-             if (delay_pattern != delay_pattern_truePrevious) {//check if is equal to the previous frequency
-              state_delayTimer = 4;
-            }
-            else {
-              state_delayTimer = 0;
-            }
-          }
-      break;
-      case(4): //FULL SEND
-        delay_pattern_truePrevious = delay_pattern;
-        outputData.delayTime = delay_pattern;
-        if (modulesSynced == true) {
-          esp_now_send(0, (uint8_t *) &outputData, sizeof(outputData));
-          if (DEBUG == true) {
-            Serial.println("delayPattern's send was run");        
-          }
+      }
+      else if (selectedProgramValue == 2){
+        if (state_PatternB == 1){ //is in wait state, run it
+          state_PatternB == 2;
+          state_PatternA = 0;
+          state_PatternC = 0;
+          state_PatternD = 0;
         }
-        state_delayTimer = 0;
-      break;
-    }
+        FSM_patternB();        
+        if(DEBUG == true){
+          if(state_PatternB != statePrevious_PatternB){
+            Serial.print("State of B: ");
+            Serial.println(state_PatternB);
+          }
+        }        
+      }
+      else if (selectedProgramValue == 3){
+        if (state_PatternC == 1){ //is in wait state, run it
+          state_PatternC == 2;
+          state_PatternA = 0;
+          state_PatternB = 0;
+          state_PatternD = 0;
+        }
+        FSM_patternC();        
+        if(DEBUG == true){
+          if(state_PatternC != statePrevious_PatternC){
+            Serial.print("State of C: ");
+            Serial.println(state_PatternC);
+          }
+        }         
+      }
+      else if (selectedProgramValue == 4){
+        if (state_PatternD == 1){ //is in wait state, run it
+          state_PatternD == 2;
+          state_PatternA = 0;
+          state_PatternB = 0;
+          state_PatternC = 0;
+        }
+        FSM_patternD();        
+        if(DEBUG == true){
+          if(state_PatternD != statePrevious_PatternD){
+            Serial.print("State of D: ");
+            Serial.println(state_PatternD);
+          }
+        }         
+      }
+      else {
+        FSM_default();
+      }  
 }
 
 void FSM_default(){
@@ -684,7 +702,52 @@ void FSM_patternC(){
 }
 
 void FSM_patternD(){
-  
+    unsigned long temp_delay_pattern = delay_pattern;
+    delay_pattern = delay_pattern / 3;
+    statePrevious_PatternD = state_PatternD;
+    switch(state_PatternD){
+      case(0): //RESET
+        count = 0;
+        state_PatternD = 1;
+      break;
+      case(1): //WAIT
+        //Do nothing, let main program initiate
+      case(2): //ITERATION 1 (Setup)
+        state_PatternD = 3;
+        timerStart_pattern = millis();
+      break;
+      case(3): //ITERATION 2
+        digitalWrite(toRegulatorA, HIGH);
+        digitalWrite(toRegulatorB, LOW);
+        digitalWrite(toRegulatorC, LOW);
+        digitalWrite(toRegulatorD, LOW);
+        timer_pattern = millis();
+        if (timer_pattern - timerStart_pattern > delay_pattern) {
+          state_PatternD = 4;
+          timerStart_pattern = millis();
+        }
+      break;
+      case(4): //ITERATION 3
+        digitalWrite(toRegulatorA, HIGH);
+        digitalWrite(toRegulatorB, HIGH);
+        digitalWrite(toRegulatorC, HIGH);
+        digitalWrite(toRegulatorD, HIGH);
+        timer_pattern = millis();
+        if (timer_pattern - timerStart_pattern > delay_pattern) {
+          state_PatternD = 5;
+          timerStart_pattern = millis();
+          }
+      break;
+      case(5): //DONE
+        if (selectedProgramValue == 4) {
+          state_PatternD = 2;
+        }
+        else {
+          state_PatternD = 0; 
+        }
+      break;
+    }
+    delay_pattern = temp_delay_pattern;
 }
 
 void OnDataSent(uint8_t *mac_addr, uint8_t sendStatus) {
@@ -701,6 +764,12 @@ void OnDataSent(uint8_t *mac_addr, uint8_t sendStatus) {
     else{
       Serial.println("Delivery fail");
     } 
+  }
+  if (sendStatus == 0){
+    isSent = true;
+  }
+  else {
+    isSent = false;
   }
 }
 
