@@ -62,6 +62,10 @@ const int loopPatternA = 3;
 const int loopPatternB = 2;
 const int loopPatternC[2] = {2,3};
 const int numberPatterns = 4; //number of patterns that currently exist
+unsigned long systemRunTimeMax = 14400000; //(milliseconds) = 4 hours runtime
+unsigned long currentRunTime = 0;
+unsigned long lastRunTime = 0;
+
 
 //STRUCTURE TO BE SENT OUT:
 typedef struct moduleBData { //module within home
@@ -122,6 +126,9 @@ void loop() {
     outputData.isActive = systemRunning; // change in activation 
     outputData.isSync = modulesSynced;
     esp_now_send(0, (uint8_t *) &outputData, sizeof(outputData));
+    if (systemRunning == true) {
+      lastRunTime = millis();
+    }
   }
   if (state_sync == 5){
     modulesSynced = !modulesSynced;
@@ -139,13 +146,8 @@ void loop() {
         if (DEBUG == true) {
           Serial.println("updateDelayTimer's send was run");        
         }
-//        if (isSent == true) {
-//          runPatterns();                  
-//        }
       }
-//      else {
-        runPatterns(); 
-//      }
+  runPatterns(); 
   }
   else {
         digitalWrite(toRegulatorA, LOW);
@@ -157,6 +159,25 @@ void loop() {
         state_PatternC = 0;
         state_PatternD = 0;
         count = 0;
+  }
+  currentRunTime = millis();
+  if (currentRunTime - lastRunTime > systemRunTimeMax) {
+        digitalWrite(toRegulatorA, LOW);
+        digitalWrite(toRegulatorB, LOW);
+        digitalWrite(toRegulatorC, LOW);
+        digitalWrite(toRegulatorD, LOW);
+        state_PatternA = 0; //put everything into standby
+        state_PatternB = 0;
+        state_PatternC = 0;
+        state_PatternD = 0;
+        count = 0; 
+        systemRunning = false;
+        outputData.isActive = systemRunning;
+        outputData.statePatternA = state_PatternA;
+        outputData.statePatternB = state_PatternB;
+        outputData.statePatternC = state_PatternC;
+        outputData.statePatternD = state_PatternD;
+        esp_now_send(0, (uint8_t *) &outputData, sizeof(outputData));
   }
 }
 
