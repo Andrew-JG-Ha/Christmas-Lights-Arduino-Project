@@ -1,4 +1,4 @@
-//WIFI MODULE CODE FOR MODULE B
+//WIFI MODULE CODE FOR MODULE A
 #include <math.h>
 #include <ESP8266WiFi.h>
 #include <espnow.h>
@@ -8,7 +8,7 @@
 
 //VARIABLES FOR DHT11 SENSOR (temperature and humidity sensor)
 #define DHTTYPE DHT11     // DHT 11
-#define DHTPIN 5 //D1
+#define DHTPIN A0 //A0
   unsigned long timer_DHT11 = 0;
   unsigned long timerStart_DHT11 = 0;
   unsigned long readDelay = 30000;
@@ -23,8 +23,8 @@ DHT_Unified dht(DHTPIN, DHTTYPE);
 //VARIABLES FOR REGULATORS: (Patterns)
 const int toRegulatorA = 14; //D5
 const int toRegulatorB = 12; //D6
-const int toRegulatorC = 13; //D7
-const int toRegulatorD = 15; //D8
+const int toRegulatorC = 5; //D1
+const int toRegulatorD = 4; //D2
   int state_PatternA = 0;
   int statePrevious_PatternA = 0;
   int state_PatternB = 0;
@@ -39,9 +39,7 @@ const int toRegulatorD = 15; //D8
   unsigned long timerStart_pattern = 0;
 
 //CONTROL VARIABLES:
-
 const bool DEBUG = true;
-
   unsigned long inputDelayTime = 5000;
   int inputPattern = 0;
   bool inputIsActive;
@@ -75,6 +73,8 @@ typedef struct moduleBData { //module within home
 uint8_t broadcastAddress[] = {0x40, 0xF5, 0x20, 0x3E, 0x28, 0x35}; //MAC of wifi module B
   moduleAData outputData; //package to be shipped to module B
   moduleBData inputData;
+
+
 
 void setup() {
   pinMode(toRegulatorA, OUTPUT);
