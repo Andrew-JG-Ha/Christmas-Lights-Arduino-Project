@@ -3,8 +3,6 @@
 #include <ESP8266WiFi.h>
 #include <espnow.h>
 
-const int isSyncedLED = 16; //S2
-
 //VARIABLES FOR ACTIVATION BUTTON:
 const int activationButton = 5; //D1 (activation/reset button)
   int value_activation = 0;
@@ -88,9 +86,6 @@ uint8_t broadcastAddress[] = {0x50, 0x02, 0x91, 0xE0, 0x53, 0xE1}; //MAC of wifi
   moduleBData outputData; //package to be shipped to module A
   moduleAData inputData;
   bool isSent = false;
-  unsigned long lastSend = 0;
-  unsigned long currentSend = 0;
-  unsigned long maxInterval = 10000; //max 10 seconds without a send to other module
 
 void setup() {
   pinMode(activationButton, INPUT);
@@ -102,7 +97,6 @@ void setup() {
   pinMode(toRegulatorB, OUTPUT);
   pinMode(toRegulatorC, OUTPUT);
   pinMode(toRegulatorD, OUTPUT);
-  pinMode(isSyncedLED, OUTPUT);
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
   if (DEBUG == true) {
@@ -128,24 +122,12 @@ void loop() {
     outputData.isActive = systemRunning; // change in activation 
     outputData.isSync = modulesSynced;
     esp_now_send(0, (uint8_t *) &outputData, sizeof(outputData));
-    if (isSent == true){
-      lastSend = millis();    
-    }
   }
   if (state_sync == 5){
     modulesSynced = !modulesSynced;
     outputData.isActive = systemRunning; // change in activation 
     outputData.isSync = modulesSynced;
     esp_now_send(0, (uint8_t *) &outputData, sizeof(outputData));
-    if (isSent == true){
-      lastSend = millis();  
-      if(modulesSynced == true) {
-        digitalWrite(isSyncedLED, HIGH);
-      }
-      else {
-        digitalWrite(isSyncedLED, LOW);
-      }
-    }
   }
   
   if (systemRunning == true) {
@@ -154,19 +136,16 @@ void loop() {
       if (modulesSynced == true) {
         updateOutputStates();
         esp_now_send(0, (uint8_t *) &outputData, sizeof(outputData));
-        if (isSent == true){
-          lastSend = millis();    
-        }
         if (DEBUG == true) {
           Serial.println("updateDelayTimer's send was run");        
         }
-        if (isSent == true) {
-          runPatterns();                  
-        }
+//        if (isSent == true) {
+//          runPatterns();                  
+//        }
       }
-      else {
+//      else {
         runPatterns(); 
-      }
+//      }
   }
   else {
         digitalWrite(toRegulatorA, LOW);
@@ -178,21 +157,6 @@ void loop() {
         state_PatternC = 0;
         state_PatternD = 0;
         count = 0;
-  }
-  currentSend = millis();
-  if (currentSend - lastSend > maxInterval) {
-    unsigned long delayTime = delay_pattern;
-    outputData.pattern = selectedProgramValue;
-    outputData.isActive = systemRunning;
-    outputData.isSync = modulesSynced;
-    outputData.statePatternA = state_PatternA;
-    outputData.statePatternB = state_PatternB;
-    outputData.statePatternC = state_PatternC;
-    outputData.statePatternD = state_PatternD;
-    esp_now_send(0, (uint8_t *) &outputData, sizeof(outputData));
-    if (isSent == true){
-      lastSend = millis();    
-    }
   }
 }
 
@@ -231,9 +195,6 @@ void debounceProgramButton(){//state machine
       outputData.pattern = selectedProgramValue;
       if (modulesSynced == true) {
         esp_now_send(0, (uint8_t *) &outputData, sizeof(outputData));
-        if (isSent == true){
-          lastSend = millis();    
-        }
         if (DEBUG == true) {
           Serial.println("SelectPattern's send was run");        
         }        
