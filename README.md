@@ -12,6 +12,8 @@ For this project, I had used:<br/>
   as well as Various electronic switches, LEDs, and current limiting resistors
 
 https://github.com/Andrew-JG-Ha/Christmas-Lights-Arduino-Project/assets/93740156/798d7358-f387-45d5-840f-4182da911256
+The Leds on one breadboard were soon replaced by a relay module instead
+
 
 Temporary setup with relay attached to the output ESP8266
 - The indoors controller is on the larger breadboard
