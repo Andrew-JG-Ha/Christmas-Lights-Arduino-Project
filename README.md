@@ -13,4 +13,7 @@ For this project, I had used:<br/>
 
 https://github.com/Andrew-JG-Ha/Christmas-Lights-Arduino-Project/assets/93740156/798d7358-f387-45d5-840f-4182da911256
 
-
+Temporary setup with relay attached to the output ESP8266
+- The indoors controller is on the larger breadboard
+- The outdoors controller is on the smaller breadboard attached to the relay module
+  ![Christmas_light_project_setup](https://github.com/Andrew-JG-Ha/Christmas-Lights-Arduino-Project/assets/93740156/5a3c9f29-63e6-4b96-9f63-e2f833b5c62e)
