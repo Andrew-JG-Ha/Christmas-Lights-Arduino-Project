@@ -2,7 +2,7 @@
 December 2021
 Created by: Andrew Ha
 
-The purpose of this project is to further my knowledge in using the ESP8266 Wifi Module and the idea of a direct link between 2 of these modules, whilst engineering a system which is fitting to the season (Christmas). This project was done with a finite state machine type of code to simulate the system being multithreaded, such that it may react to inputs into the system at a synchronous timeframe.
+The purpose of this project is to further my knowledge in using the ESP8266 Wifi Module and the idea of a direct link between 2 of these modules, whilst engineering a system which is fitting to the season (Christmas). This project was done with a finite state machine type of code to allow the system to multitask, such that it may react to inputs into the system at a synchronous timeframe.
 
 For this project, I had used:<br/>
   2X NodeMCU V3 ESP8266 Wifi Modules<br/>
