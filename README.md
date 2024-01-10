@@ -10,4 +10,7 @@ For this project, I had used:<br/>
   3X patterned outdoors lights<br/>
   1X stringed LED lights<br/>
   as well as Various electronic switches, LEDs, and current limiting resistors
-  
+
+https://github.com/Andrew-JG-Ha/Christmas-Lights-Arduino-Project/assets/93740156/798d7358-f387-45d5-840f-4182da911256
+
+
